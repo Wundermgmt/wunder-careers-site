@@ -1,0 +1,21 @@
+# Render Blueprint for the Wunder Management careers site.
+# Standalone repo: the site is at the repo root, so no root-directory setting.
+services:
+  - type: web
+    name: wunder-careers
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=300, must-revalidate
