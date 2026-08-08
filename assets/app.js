@@ -48,10 +48,16 @@
     return out;
   }
 
+  // Meta sends the same creative under three different spellings; angle.js
+  // collapses them so a group-by counts one creative once.
+  function sourceAngle(p) {
+    return window.WUNDER_ANGLE.normalize(p.angle || p.source || p.utm_content || '');
+  }
+
   function context(extra) {
     var p = params();
     var ctx = {
-      source_angle: p.angle || p.source || p.utm_content || '',
+      source_angle: sourceAngle(p),
       utm_source: p.utm_source || '',
       utm_medium: p.utm_medium || '',
       utm_campaign: p.utm_campaign || '',
@@ -605,7 +611,7 @@
       // Attribution fields never render; the ad's URL supplies them.
       var p = params();
       (form.hidden || []).forEach(function (q) {
-        var v = p.angle || p.source || p.utm_content || '';
+        var v = sourceAngle(p);
         if (v) answers[q.fid] = v;
       });
 
