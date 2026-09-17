@@ -17,6 +17,11 @@ window.WUNDER_CONFIG = {
   // Must match CONFIG.MAX_FILE_MB in Config.gs.
   MAX_FILE_MB: 8,
 
+  // Live job postings, served by the hiring admin app. When this is unreachable
+  // the site falls back to the roles baked into forms.js, so the page never
+  // depends on the admin app being awake.
+  POSTINGS_API: "https://wunder-hiring-admin.onrender.com/api/postings",
+
   // Lets an applicant close the tab and come back without losing their answers.
   // Files are never saved to the browser, only text.
   SAVE_DRAFTS: true,

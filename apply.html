@@ -15,68 +15,106 @@
       <span class="brand-mark" aria-hidden="true">W</span>
       <span class="brand-text">Wunder Management <span class="brand-sub">Careers</span></span>
     </a>
-    <a class="header-link" href="index.html">All open roles</a>
+    <a class="header-link" href="index.html">All roles</a>
   </div>
 </header>
 
 <main id="main">
-  <section class="role-hero">
-    <div class="wrap">
+
+  <!--
+    Screen zero. The applicant arrived from an ad for THIS role, so it leads with
+    the facts and one action. The full ad collapses behind a summary rather than
+    filling three phone screens above the first question.
+  -->
+  <section class="intro" id="introScreen">
+    <div class="wrap wrap--quiz">
       <a class="back-link" href="index.html">&larr; All open roles</a>
       <h1 id="roleTitle">Loading role&hellip;</h1>
+      <p class="intro__summary" id="roleSummary"></p>
       <div class="meta-grid" id="roleMeta"></div>
+
+      <details class="details">
+        <summary>Full role details</summary>
+        <div class="details__body">
+          <article class="ad" id="roleAd" aria-label="Role description"></article>
+        </div>
+      </details>
+
+      <div class="intro__cta">
+        <button type="button" class="btn btn--block" id="startBtn">Start application</button>
+      </div>
+      <p class="intro__note" id="introNote"></p>
     </div>
   </section>
 
-  <div class="wrap">
-    <div class="layout">
-      <article class="ad" id="roleAd" aria-label="Role description"></article>
+  <!-- The quiz itself: one question per screen. -->
+  <section class="quiz" id="quizScreen" hidden>
+    <div class="wrap wrap--quiz">
 
-      <aside class="form-panel">
-        <section class="card" aria-labelledby="formHeading">
-          <div class="card__head">
-            <h2 id="formHeading">Apply for this role</h2>
-            <p id="formSubhead">A few minutes. Your answers save as you go.</p>
-            <div class="progress" id="progress" role="presentation"></div>
-            <p class="step-count" id="stepCount"></p>
-          </div>
+      <div class="quiz__bar">
+        <button type="button" class="quiz__back" id="quizBack" aria-label="Go back to the previous question">&larr;</button>
+        <div class="progress" role="presentation"><div class="progress__fill" id="progressFill"></div></div>
+        <p class="step-count" id="stepCount"></p>
+      </div>
 
-          <form id="applyForm" novalidate>
-            <div class="card__body">
-              <div class="banner" id="banner" role="alert"></div>
-              <div id="steps"></div>
-              <!-- Bots fill every field they can find, including this one. -->
-              <div style="position:absolute;left:-9999px" aria-hidden="true">
-                <label for="hp">Do not fill this in</label>
-                <input type="text" id="hp" name="website_url" tabindex="-1" autocomplete="off">
-              </div>
-              <p class="form-note" id="privacyNote"></p>
-            </div>
-            <div class="card__foot">
-              <button type="button" class="btn btn--ghost" id="backBtn">Back</button>
-              <button type="submit" class="btn btn--accent" id="nextBtn">Continue</button>
-            </div>
-          </form>
+      <form id="applyForm" novalidate>
+        <div class="banner" id="banner" role="alert"></div>
+        <div id="screens"></div>
 
-          <div class="done" id="done" role="status">
-            <div class="done__mark" aria-hidden="true">&check;</div>
-            <h2>Application received</h2>
-            <p id="doneMessage"></p>
-            <p style="margin-top:22px">
-              <a class="btn btn--ghost" href="index.html">See other open roles</a>
-            </p>
-          </div>
-        </section>
-        <noscript>
-          <div class="empty" style="margin-top:20px">
-            <h2>This form needs JavaScript</h2>
-            <p>Email <a href="mailto:ja@kgmodelmanagement.com">ja@kgmodelmanagement.com</a>
-               and we will send you the application directly.</p>
-          </div>
-        </noscript>
-      </aside>
+        <!-- Bots fill every field they can find, including this one. -->
+        <div style="position:absolute;left:-9999px" aria-hidden="true">
+          <label for="hp">Do not fill this in</label>
+          <input type="text" id="hp" name="website_url" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="quiz__foot" id="quizFoot">
+          <button type="submit" class="btn btn--block" id="nextBtn">Continue</button>
+        </div>
+        <p class="form-note" id="privacyNote"></p>
+      </form>
+
+      <!--
+        The receipt. Deliberately more than a thank-you line: on 14 Aug 2026 two
+        roles rejected every submission for 15 hours, and the applicants who
+        noticed emailed their CVs in to ask whether it had arrived. A receipt
+        that names the role, echoes the address we will reply to and says what
+        happens next is what stops that question being asked at all.
+      -->
+      <div class="done" id="done" role="status">
+        <div class="done__mark" aria-hidden="true">&check;</div>
+        <h2>Application received</h2>
+        <p class="done__role" id="doneRole"></p>
+        <p id="doneMessage"></p>
+
+        <div class="done__next">
+          <h3>What happens next</h3>
+          <ol>
+            <li>Your answers are saved. Nothing further is needed from you.</li>
+            <li>We review every application against the requirements for this role.</li>
+            <li id="doneEmailStep">If you are shortlisted, we will email you.</li>
+          </ol>
+          <p class="done__note">
+            Our replies come from <strong>ja@kgmodelmanagement.com</strong>. Please
+            check your spam and promotions folders so it is not missed.
+          </p>
+        </div>
+
+        <p style="margin-top:28px">
+          <a class="btn btn--ghost" href="index.html">See other open roles</a>
+        </p>
+      </div>
+
+      <noscript>
+        <div class="empty" style="margin-top:20px">
+          <h2>This form needs JavaScript</h2>
+          <p>Email <a href="mailto:ja@kgmodelmanagement.com">ja@kgmodelmanagement.com</a>
+             and we will send you the application directly.</p>
+        </div>
+      </noscript>
+
     </div>
-  </div>
+  </section>
+
 </main>
 
 <footer class="site-footer">
@@ -95,5 +133,6 @@
 <script src="assets/angle.js"></script>
 <script src="assets/forms.js"></script>
 <script src="assets/app.js"></script>
+<script src="assets/postings-live.js"></script>
 </body>
 </html>

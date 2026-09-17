@@ -2,19 +2,33 @@
  * app.js - drives both pages of the careers site.
  *
  *   index.html  a filterable list of the open roles
- *   apply.html  the job ad plus a multi-step application form
+ *   apply.html  the role intro, then the application as a one-question-per-screen quiz
  *
- * There is no framework and no build step, matching the existing apply page.
- * Everything the form needs comes from assets/forms.js, which is generated from
- * the same source of truth as the Airtable and Google Forms versions.
+ * There is no framework and no build step. Everything the form needs comes from
+ * assets/forms.js, which is generated from the same source of truth as the
+ * Airtable and Google Forms versions.
  *
- * Two details that are easy to get wrong:
+ * WHY ONE QUESTION PER SCREEN
+ * The questions arrive grouped into four steps, and one of those steps routinely
+ * holds eight or nine of them. On a phone that is a wall, and it is the point
+ * people quit. Showing one question at a time with a large tap target turns the
+ * same 15-18 questions into a sequence of single decisions, and the "3 / 17"
+ * counter keeps the remaining work honest. The grouping is a presentation choice
+ * made here; forms.js is untouched, because an edit there would be overwritten
+ * the next time it is regenerated.
+ *
+ * Four details that are easy to get wrong:
  *
  *   1. The POST is sent as text/plain. An Apps Script /exec endpoint does not
  *      answer CORS preflight requests, and application/json triggers one. The
  *      body is still JSON; only the declared type differs.
  *   2. Ad tracking parameters are read once on load and carried through the
  *      click from the role list to the form, so attribution survives navigation.
+ *   3. Both renderers run twice - once from the baked roles, once when
+ *      postings-live.js merges the live ones - so everything they build must be
+ *      REPLACED, never appended to, and no listener may be attached twice.
+ *   4. A single-choice question advances on tap, but never on the LAST screen:
+ *      there, a tap would submit the application without a confirming action.
  */
 (function () {
   'use strict';
@@ -23,6 +37,10 @@
   var FORMS = window.WUNDER_FORMS || [];
   var PAGE = document.body.getAttribute('data-page');
   var DEMO = !CFG.ENDPOINT || CFG.ENDPOINT.indexOf('PASTE') === 0;
+
+  // State that has to outlive a re-render.
+  var activeTeam = 'All';   // the chosen filter chip, so a merge does not reset it
+  var formBuilt = false;    // the quiz is built once; see renderApply
 
   /* ============================== helpers ============================== */
 
@@ -100,52 +118,46 @@
   function renderIndex() {
     var grid = document.getElementById('roles');
     var filters = document.getElementById('filters');
-    var count = document.getElementById('roleCount');
     if (!grid) return;
-
-    if (count) count.textContent = String(FORMS.length);
 
     var teams = ['All'];
     FORMS.forEach(function (f) {
       if (teams.indexOf(f.card.team) === -1) teams.push(f.card.team);
     });
 
-    var active = 'All';
+    // A merge can close the team that was being filtered on. Falling back to All
+    // beats showing an empty page with a chip still lit.
+    if (teams.indexOf(activeTeam) === -1) activeTeam = 'All';
+
+    // Cleared, not added to: without this the second pass drew a second full row
+    // of chips underneath the first.
+    filters.textContent = '';
 
     function draw() {
       grid.textContent = '';
-      var shown = FORMS.filter(function (f) {
-        return active === 'All' || f.card.team === active;
-      });
-
-      shown.forEach(function (f) {
-        var card = el('article', { class: 'role' });
+      FORMS.filter(function (f) {
+        return activeTeam === 'All' || f.card.team === activeTeam;
+      }).forEach(function (f) {
+        // The whole card is the link, so the tap target is the card and not a
+        // button inside it.
+        var card = el('a', {
+          class: 'role',
+          href: carryParams('apply.html?role=' + encodeURIComponent(f.key))
+        });
 
         var top = el('div', { class: 'role__top' });
-        top.appendChild(el('span', { class: 'badge badge--accent' }, f.card.team));
-        top.appendChild(el('span', { class: 'badge' }, 'Remote · Philippines'));
+        top.appendChild(el('span', { class: 'badge' }, f.card.team));
+        top.appendChild(el('span', { class: 'badge badge--new' }, 'Open'));
         card.appendChild(top);
 
         card.appendChild(el('h2', null, f.title));
-        card.appendChild(el('p', { class: 'role__summary' }, f.card.summary));
+        card.appendChild(el('p', { class: 'role__remote' }, 'Remote · Philippines · Full-time contractor'));
+        if (f.card.summary) card.appendChild(el('p', { class: 'role__summary' }, f.card.summary));
 
-        var facts = el('ul', { class: 'role__facts' });
-        [['Pay', f.card.pay], ['Earnings', f.card.range], ['Hours', f.card.hours]]
-          .forEach(function (pair) {
-            var li = el('li');
-            li.appendChild(el('span', { class: 'fact__k' }, pair[0]));
-            li.appendChild(el('span', { class: 'fact__v' }, pair[1]));
-            facts.appendChild(li);
-          });
-        card.appendChild(facts);
-
-        var cta = el('div', { class: 'role__cta' });
-        var link = el('a', {
-          class: 'btn btn--block',
-          href: carryParams('apply.html?role=' + encodeURIComponent(f.key))
-        }, 'View role and apply');
-        cta.appendChild(link);
-        card.appendChild(cta);
+        var foot = el('div', { class: 'role__foot' });
+        foot.appendChild(el('span', { class: 'role__pay' }, f.card.range || f.card.pay || ''));
+        foot.appendChild(el('span', { class: 'role__hours' }, f.card.hours || ''));
+        card.appendChild(foot);
 
         grid.appendChild(card);
       });
@@ -153,10 +165,10 @@
 
     teams.forEach(function (team) {
       var chip = el('button', {
-        class: 'chip', type: 'button', 'aria-pressed': team === active ? 'true' : 'false'
+        class: 'chip', type: 'button', 'aria-pressed': team === activeTeam ? 'true' : 'false'
       }, team);
       chip.addEventListener('click', function () {
-        active = team;
+        activeTeam = team;
         Array.prototype.forEach.call(filters.children, function (c) {
           c.setAttribute('aria-pressed', c === chip ? 'true' : 'false');
         });
@@ -174,35 +186,50 @@
     var key = new URLSearchParams(window.location.search).get('role');
     var form = FORMS.filter(function (f) { return f.key === key; })[0];
 
+    var intro = document.getElementById('introScreen');
+    var quiz = document.getElementById('quizScreen');
+    var notOpen = document.getElementById('notOpen');
+
     if (!form) {
-      var main = document.getElementById('main');
-      main.textContent = '';
-      var wrap = el('div', { class: 'wrap' });
-      var box = el('div', { class: 'empty' });
-      box.style.margin = '60px 0';
-      box.appendChild(el('h2', null, 'That role is not open'));
-      box.appendChild(el('p', null,
-        'The link may be out of date. Here is everything we are hiring for now.'));
-      var back = el('p');
-      back.style.marginTop = '20px';
-      back.appendChild(el('a', { class: 'btn', href: 'index.html' }, 'See all open roles'));
-      box.appendChild(back);
-      wrap.appendChild(box);
-      main.appendChild(wrap);
+      // Hidden, never destroyed. This branch used to empty <main>, which deleted
+      // the markup the next pass needs - so a role added in the admin tool could
+      // never render, it only ever threw on the re-render that found it.
+      if (intro) intro.hidden = true;
+      if (quiz) quiz.hidden = true;
+      if (!notOpen) {
+        notOpen = el('div', { class: 'wrap wrap--quiz', id: 'notOpen' });
+        var box = el('div', { class: 'empty' });
+        box.style.margin = '50px 0';
+        box.appendChild(el('h2', null, 'That role is not open'));
+        box.appendChild(el('p', null,
+          'The link may be out of date. Here is everything we are hiring for now.'));
+        var back = el('p');
+        back.style.marginTop = '20px';
+        back.appendChild(el('a', { class: 'btn', href: 'index.html' }, 'See all open roles'));
+        box.appendChild(back);
+        notOpen.appendChild(box);
+        document.getElementById('main').appendChild(notOpen);
+      }
       return;
     }
 
+    if (notOpen) notOpen.remove();
+    if (intro && !formBuilt) intro.hidden = false;
+
     document.title = form.title + ' — Wunder Management Careers';
     document.getElementById('roleTitle').textContent = form.title;
+    document.getElementById('roleSummary').textContent = form.card.summary || '';
 
     var meta = document.getElementById('roleMeta');
+    meta.textContent = '';        // replaced, not appended to
     [['Team', form.card.team], ['Pay', form.card.pay], ['Earnings', form.card.range],
      ['Hours', form.card.hours], ['Location', 'Remote, Philippines']]
       .forEach(function (pair) {
-        var box2 = el('div', { class: 'meta' });
-        box2.appendChild(el('div', { class: 'meta__k' }, pair[0]));
-        box2.appendChild(el('div', { class: 'meta__v' }, pair[1]));
-        meta.appendChild(box2);
+        if (!pair[1]) return;
+        var cell = el('div', { class: 'meta' });
+        cell.appendChild(el('div', { class: 'meta__k' }, pair[0]));
+        cell.appendChild(el('div', { class: 'meta__v' }, pair[1]));
+        meta.appendChild(cell);
       });
 
     // Generated by us from the Airtable ad text, never from user input.
@@ -215,21 +242,76 @@
       target: '_blank', rel: 'noopener'
     }, 'Privacy policy'));
 
-    buildForm(form);
+    // ONCE. buildQuiz attaches listeners to the static markup in apply.html, so
+    // calling it twice attached a second submit handler and one click on
+    // "Submit application" POSTed the application twice.
+    //
+    // A merge never changes a baked role's questions - postings-live.js only
+    // rewrites card copy and the ad body - so there is nothing to rebuild. The
+    // flag rather than an early return is deliberate: a role that exists only as
+    // a live posting is absent on the first pass, and its form must still get
+    // built on the pass that finds it.
+    if (!formBuilt) {
+      formBuilt = true;
+      buildQuiz(form);
+    }
   }
 
-  /* ============================ the form ============================ */
+  /* ============================ the quiz ============================ */
 
-  function buildForm(form) {
-    var stepsHost = document.getElementById('steps');
-    var progress = document.getElementById('progress');
+  /**
+   * Flattens the grouped steps into one screen per question, and splices in a
+   * couple of breather screens. The counter deliberately counts QUESTIONS only,
+   * so a breather does not make the applicant think they answered something.
+   */
+  function buildScreens(form) {
+    var qs = [];
+    form.steps.forEach(function (step) {
+      step.questions.forEach(function (q) { qs.push({ kind: 'q', q: q, group: step.title }); });
+    });
+
+    // Two at most. More reads as padding, and every extra screen is another
+    // chance to leave.
+    var pauses = {};
+    if (qs.length > 8) {
+      pauses[4] = {
+        kind: 'pause', big: '25',
+        head: 'You are joining a real team',
+        body: 'Twenty-five people, fully remote, behind more than 3 billion organic views in three years.'
+      };
+      pauses[Math.max(9, qs.length - 4)] = {
+        kind: 'pause', big: 'Almost',
+        head: 'Nearly there',
+        body: 'The last few questions are the ones we actually read when deciding the shortlist.'
+      };
+    }
+
+    var screens = [];
+    qs.forEach(function (item, i) {
+      if (pauses[i]) screens.push(pauses[i]);
+      screens.push(item);
+    });
+    return screens;
+  }
+
+  function buildQuiz(form) {
+    var host = document.getElementById('screens');
+    var fill = document.getElementById('progressFill');
     var stepCount = document.getElementById('stepCount');
     var banner = document.getElementById('banner');
-    var backBtn = document.getElementById('backBtn');
+    var backBtn = document.getElementById('quizBack');
     var nextBtn = document.getElementById('nextBtn');
+    var foot = document.getElementById('quizFoot');
     var formEl = document.getElementById('applyForm');
     var done = document.getElementById('done');
-    var startedAt = Date.now();
+    var intro = document.getElementById('introScreen');
+    var quiz = document.getElementById('quizScreen');
+    var startBtn = document.getElementById('startBtn');
+
+    var screens = buildScreens(form);
+    var questions = screens.filter(function (s) { return s.kind === 'q'; })
+                           .map(function (s) { return s.q; });
+    var total = questions.length;
     var current = 0;
     var files = {};                 // fid -> {name, mimeType, data}
     var reading = {};               // fid -> Promise, resolved when the read finishes
@@ -243,22 +325,30 @@
                            'so submissions are validated but not saved.';
     }
 
-    form.steps.forEach(function (step, i) {
-      var section = el('section', {
-        class: 'step', 'data-active': i === 0 ? 'true' : 'false',
-        'aria-label': step.title
-      });
-      section.appendChild(el('p', { class: 'step__blurb' }, step.blurb));
-      step.questions.forEach(function (q) { section.appendChild(field(q)); });
-      stepsHost.appendChild(section);
+    /* --------------------------- build the DOM --------------------------- */
 
-      var seg = el('div', {
-        class: 'progress__seg', 'data-state': i === 0 ? 'current' : 'todo'
+    screens.forEach(function (s, i) {
+      var section = el('section', {
+        class: 'screen', 'data-active': i === 0 ? 'true' : 'false',
+        'data-kind': s.kind
       });
-      progress.appendChild(seg);
+
+      if (s.kind === 'pause') {
+        var pause = el('div', { class: 'pause' });
+        pause.appendChild(el('div', { class: 'pause__n' }, s.big));
+        pause.appendChild(el('h2', null, s.head));
+        pause.appendChild(el('p', null, s.body));
+        section.appendChild(pause);
+      } else {
+        section.setAttribute('aria-label', s.q.title);
+        if (s.group) section.appendChild(el('p', { class: 'screen__eyebrow' }, s.group));
+        section.appendChild(field(s.q));
+      }
+
+      host.appendChild(section);
     });
 
-    var sections = stepsHost.querySelectorAll('.step');
+    var sections = host.querySelectorAll('.screen');
 
     function field(q) {
       var wrapEl = el('div', { class: 'field', 'data-fid': q.fid, 'data-type': q.type });
@@ -266,8 +356,7 @@
       var errId = 'e_' + q.fid;
 
       var label = el('label', { class: 'field__label', for: id }, q.title);
-      if (q.required) label.appendChild(el('span', { class: 'req', 'aria-hidden': 'true' }, '*'));
-      else label.appendChild(el('span', { class: 'opt' }, 'optional'));
+      if (!q.required) label.appendChild(el('span', { class: 'opt' }, ' (optional)'));
       wrapEl.appendChild(label);
 
       if (q.help) {
@@ -282,7 +371,7 @@
         // A fieldset would duplicate the label for screen readers, so the group
         // is described by the label above via aria-labelledby on the container.
         var group = el('div', {
-          class: 'choices' + (q.choices.length === 2 ? ' choices--inline' : ''),
+          class: 'choices',
           role: q.type === 'choice' ? 'radiogroup' : 'group',
           'aria-labelledby': id + '_l', 'aria-describedby': described
         });
@@ -296,13 +385,14 @@
           });
           opt.appendChild(input);
           opt.appendChild(el('span', null, choice));
+          opt.appendChild(el('span', { class: 'choice__tick', 'aria-hidden': 'true' }, '✓'));
           group.appendChild(opt);
         });
         wrapEl.appendChild(group);
 
       } else if (q.type === 'file') {
         var drop = el('label', { class: 'file-drop', 'data-has-file': 'false' });
-        var input2 = el('input', {
+        var fileInput = el('input', {
           type: 'file', id: id, accept: q.accept || '', 'aria-describedby': described
         });
         var icon = el('div', { class: 'file-drop__icon', 'aria-hidden': 'true' }, '↑');
@@ -311,13 +401,13 @@
         var hint = el('span', null, q.hint || ('Up to ' + (CFG.MAX_FILE_MB || 8) + ' MB.'));
         textBox.appendChild(strong);
         textBox.appendChild(hint);
-        drop.appendChild(input2);
+        drop.appendChild(fileInput);
         drop.appendChild(icon);
         drop.appendChild(textBox);
         wrapEl.appendChild(drop);
 
-        input2.addEventListener('change', function () {
-          var file = input2.files && input2.files[0];
+        fileInput.addEventListener('change', function () {
+          var file = fileInput.files && fileInput.files[0];
           delete files[q.fid];
           delete reading[q.fid];
 
@@ -327,7 +417,7 @@
           if (file.size > limit) {
             showError(q.fid, 'That file is ' + (file.size / 1048576).toFixed(1) +
                              ' MB. The limit is ' + (CFG.MAX_FILE_MB || 8) + ' MB.');
-            input2.value = '';
+            fileInput.value = '';
             drop.setAttribute('data-has-file', 'false');
             return;
           }
@@ -348,7 +438,7 @@
                 mimeType: file.type || 'application/octet-stream',
                 data: String(reader.result).split(',')[1]
               };
-              hint.textContent = (file.size / 1024).toFixed(0) + ' KB — click to replace';
+              hint.textContent = (file.size / 1024).toFixed(0) + ' KB — tap to replace';
               resolve();
             };
             reader.onerror = function () {
@@ -362,14 +452,13 @@
           });
         });
 
-      } else if (q.type === 'paragraph') {
+      } else if (q.type === 'paragraph' || q.type === 'long') {
         var ta = el('textarea', {
-          id: id, name: q.fid, rows: 5, 'aria-describedby': described
+          id: id, name: q.fid, rows: 6, 'aria-describedby': described
         });
         wrapEl.appendChild(ta);
         if (q.minChars) {
-          var counter = el('p', { class: 'field__help' }, 'Minimum ' + q.minChars + ' characters.');
-          counter.style.marginTop = '7px';
+          var counter = el('p', { class: 'char-count' }, 'Minimum ' + q.minChars + ' characters');
           wrapEl.appendChild(counter);
           ta.addEventListener('input', function () {
             var n = ta.value.trim().length;
@@ -381,13 +470,13 @@
 
       } else {
         var types = { email: 'email', phone: 'tel', number: 'number', url: 'url' };
-        var input3 = el('input', {
+        var input = el('input', {
           type: types[q.type] || 'text', id: id, name: q.fid,
           'aria-describedby': described,
           autocomplete: autoComplete(q),
           inputmode: q.type === 'number' ? 'numeric' : null
         });
-        wrapEl.appendChild(input3);
+        wrapEl.appendChild(input);
       }
 
       wrapEl.appendChild(el('p', { class: 'error', id: errId, 'aria-live': 'polite' }));
@@ -417,8 +506,6 @@
     }
 
     /* --------------------------- validation --------------------------- */
-
-    function questionsIn(i) { return form.steps[i].questions; }
 
     function valueOf(q) {
       if (q.type === 'file') {
@@ -456,74 +543,123 @@
       if (input) input.removeAttribute('aria-invalid');
     }
 
-    function checkStep(i) {
-      var bad = null;
-      questionsIn(i).forEach(function (q) {
-        clearError(q.fid);
-        var v = valueOf(q);
-        var empty = Array.isArray(v) ? v.length === 0 : String(v).trim() === '';
+    /** Validates the one question on the current screen. */
+    function checkCurrent() {
+      var s = screens[current];
+      if (s.kind !== 'q') return true;
+      var q = s.q;
 
-        if (q.required && empty) {
-          showError(q.fid, q.type === 'file' ? 'Please attach a file.' : 'This one is required.');
-          bad = bad || q.fid;
-          return;
-        }
-        if (empty) return;
+      clearError(q.fid);
+      var v = valueOf(q);
+      var empty = Array.isArray(v) ? v.length === 0 : String(v).trim() === '';
 
-        if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
-          showError(q.fid, 'That email address does not look right.');
-          bad = bad || q.fid;
-        } else if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) {
-          showError(q.fid, 'Please include the full number with country code.');
-          bad = bad || q.fid;
-        } else if (q.minChars && String(v).trim().length < q.minChars) {
-          showError(q.fid, 'Please write at least ' + q.minChars + ' characters. ' +
-                           'This answer decides the shortlist.');
-          bad = bad || q.fid;
-        }
-      });
-
-      if (bad) {
-        var node = document.getElementById('q_' + bad) ||
-                   formEl.querySelector('[data-fid="' + bad + '"]');
-        if (node && node.scrollIntoView) node.scrollIntoView({ block: 'center' });
-        if (node && node.focus) node.focus();
+      if (q.required && empty) {
+        showError(q.fid, q.type === 'file' ? 'Please attach a file.'
+                       : (q.type === 'choice' || q.type === 'multi') ? 'Please choose an answer.'
+                       : 'This one is required.');
+        return false;
       }
-      return !bad;
+      if (empty) return true;
+
+      if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
+        showError(q.fid, 'That email address does not look right.');
+        return false;
+      }
+      if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) {
+        showError(q.fid, 'Please include the full number with country code.');
+        return false;
+      }
+      if (q.minChars && String(v).trim().length < q.minChars) {
+        showError(q.fid, 'Please write at least ' + q.minChars + ' characters. ' +
+                         'This answer decides the shortlist.');
+        return false;
+      }
+      return true;
     }
 
-    /* ----------------------------- steps ----------------------------- */
+    /* ----------------------------- painting ----------------------------- */
+
+    function questionsBefore(i) {
+      var n = 0;
+      for (var k = 0; k < i; k++) if (screens[k].kind === 'q') n += 1;
+      return n;
+    }
+
+    function isLast() { return current === screens.length - 1; }
 
     function paint() {
       Array.prototype.forEach.call(sections, function (s, i) {
         s.setAttribute('data-active', i === current ? 'true' : 'false');
       });
-      Array.prototype.forEach.call(progress.children, function (seg, i) {
-        seg.setAttribute('data-state', i < current ? 'done' : (i === current ? 'current' : 'todo'));
-      });
-      stepCount.textContent = 'Step ' + (current + 1) + ' of ' + form.steps.length +
-                              ' — ' + form.steps[current].title;
-      backBtn.style.visibility = current === 0 ? 'hidden' : 'visible';
-      nextBtn.textContent = current === form.steps.length - 1 ? 'Submit application' : 'Continue';
+
+      var answered = questionsBefore(current);
+      var s = screens[current];
+      var shown = s.kind === 'q' ? answered + 1 : answered;
+
+      stepCount.textContent = Math.min(shown, total) + ' / ' + total;
+      fill.style.width = Math.round((answered / total) * 100) + '%';
+      backBtn.hidden = current === 0;
+
+      // A single-choice question advances on tap, so it needs no button - except
+      // on the last screen, where a tap must not submit on its own, and when the
+      // question is optional and therefore needs a way past it.
+      var q = s.kind === 'q' ? s.q : null;
+      var tapAdvances = q && q.type === 'choice' && !isLast();
+
+      if (tapAdvances && q.required) {
+        foot.hidden = true;
+      } else {
+        foot.hidden = false;
+        // Skip is secondary on purpose. As a solid black button it outweighed the
+        // option cards and read as the thing to press.
+        var isSkip = tapAdvances && !q.required;
+        nextBtn.className = 'btn btn--block' + (isSkip ? ' btn--ghost' : '');
+        nextBtn.textContent = isLast() ? 'Submit application' : isSkip ? 'Skip' : 'Continue';
+      }
     }
 
-    backBtn.addEventListener('click', function () {
-      if (current > 0) { current -= 1; paint(); focusStep(); }
-    });
-
-    function focusStep() {
-      var first = sections[current].querySelector('input, textarea, select');
-      if (first && first.type !== 'file') first.focus();
-      document.querySelector('.card__head').scrollIntoView({ block: 'nearest' });
+    function goTo(i) {
+      current = Math.max(0, Math.min(screens.length - 1, i));
+      paint();
+      var focusable = sections[current].querySelector('textarea, input[type="text"], ' +
+        'input[type="email"], input[type="tel"], input[type="number"], input[type="url"]');
+      if (focusable) focusable.focus();
+      // The bar carries the counter and the back button, so it is the right
+      // anchor: the question lands just under it.
+      var bar = document.querySelector('.quiz__bar');
+      if (bar && bar.scrollIntoView) bar.scrollIntoView({ block: 'start' });
     }
+
+    function advance() {
+      if (!checkCurrent()) return;
+      if (isLast()) { submit(); return; }
+      goTo(current + 1);
+      saveDraft();
+    }
+
+    backBtn.addEventListener('click', function () { if (current > 0) goTo(current - 1); });
 
     formEl.addEventListener('submit', function (e) {
       e.preventDefault();
-      if (!checkStep(current)) return;
-      if (current < form.steps.length - 1) {
-        current += 1; paint(); focusStep(); saveDraft(); return;
-      }
-      submit();
+      advance();
+    });
+
+    // Tap-to-advance. Delegated once on the form, so no per-option listener and
+    // nothing to re-attach.
+    formEl.addEventListener('change', function (e) {
+      var input = e.target;
+      if (!input || input.type !== 'radio') return;
+      var s = screens[current];
+      if (s.kind !== 'q' || s.q.type !== 'choice' || isLast()) return;
+      if (input.name !== s.q.fid) return;
+      // A short pause so the filled card registers before the screen changes.
+      setTimeout(function () { if (screens[current] === s) advance(); }, 190);
+    });
+
+    startBtn.addEventListener('click', function () {
+      intro.hidden = true;
+      quiz.hidden = false;
+      goTo(0);
     });
 
     /* ----------------------------- drafts ----------------------------- */
@@ -531,12 +667,10 @@
     function saveDraft() {
       if (!CFG.SAVE_DRAFTS || submitted) return;
       var data = {};
-      form.steps.forEach(function (s) {
-        s.questions.forEach(function (q) {
-          if (q.type === 'file') return;      // never store file bytes locally
-          var v = valueOf(q);
-          if (Array.isArray(v) ? v.length : String(v).length) data[q.fid] = v;
-        });
+      questions.forEach(function (q) {
+        if (q.type === 'file') return;      // never store file bytes locally
+        var v = valueOf(q);
+        if (Array.isArray(v) ? v.length : String(v).length) data[q.fid] = v;
       });
       try { localStorage.setItem(draftKey, JSON.stringify(data)); } catch (err) {}
     }
@@ -546,24 +680,38 @@
       var raw;
       try { raw = localStorage.getItem(draftKey); } catch (err) { return; }
       if (!raw) return;
-      var data = JSON.parse(raw);
+      var data;
+      try { data = JSON.parse(raw); } catch (err) { return; }
 
       Object.keys(data).forEach(function (fid) {
         var value = data[fid];
-        var radios = formEl.querySelectorAll('input[name="' + fid + '"]');
-        if (radios.length) {
+
+        // Match on TYPE as well as name. Text inputs and textareas also carry a
+        // name attribute, so selecting on name alone routed them down the
+        // radio/checkbox path, which sets `checked` and never touches `value` -
+        // the answers stayed blank while the page claimed it had restored them.
+        var boxes = formEl.querySelectorAll(
+          'input[type="radio"][name="' + fid + '"], ' +
+          'input[type="checkbox"][name="' + fid + '"]');
+
+        if (boxes.length) {
           var wanted = Array.isArray(value) ? value : [value];
-          Array.prototype.forEach.call(radios, function (r) {
-            if (wanted.indexOf(r.value) !== -1) r.checked = true;
+          Array.prototype.forEach.call(boxes, function (b) {
+            if (wanted.indexOf(b.value) !== -1) b.checked = true;
           });
           return;
         }
+
         var node = document.getElementById('q_' + fid);
-        if (node) node.value = value;
+        if (!node) return;
+        node.value = value;
+        // Wakes up the minimum-character counter, which otherwise still reads
+        // "Minimum 40 characters" under a restored answer that already clears it.
+        node.dispatchEvent(new Event('input', { bubbles: true }));
       });
 
-      document.getElementById('formSubhead').textContent =
-        'We restored your saved answers. Pick up where you left off.';
+      document.getElementById('introNote').textContent =
+        'We saved your answers on this device. Starting again picks up where you left off.';
     }
 
     function debounce(fn, ms) {
@@ -600,12 +748,10 @@
 
     function send() {
       var answers = {};
-      form.steps.forEach(function (s) {
-        s.questions.forEach(function (q) {
-          if (q.type === 'file') return;
-          var v = valueOf(q);
-          if (Array.isArray(v) ? v.length : String(v).length) answers[q.fid] = v;
-        });
+      questions.forEach(function (q) {
+        if (q.type === 'file') return;
+        var v = valueOf(q);
+        if (Array.isArray(v) ? v.length : String(v).length) answers[q.fid] = v;
       });
 
       // Attribution fields never render; the ad's URL supplies them.
@@ -634,10 +780,43 @@
         queueSave.cancel();
         try { localStorage.removeItem(draftKey); } catch (err) {}
         formEl.style.display = 'none';
-        document.querySelector('.card__head').style.display = 'none';
+        document.querySelector('.quiz__bar').style.display = 'none';
+        // form.confirmation is deliberately NOT printed here. It reads "we review
+        // every application and will email you if you are shortlisted", which is
+        // word for word what steps 2 and 3 below already say, and saying it twice
+        // made the receipt look padded. The steps are the canonical version; this
+        // line carries a submission time instead, which is the one thing an
+        // applicant cannot get anywhere else.
+        var stamp = new Date();
+        try {
+          stamp = stamp.toLocaleString(undefined, {
+            weekday: 'long', day: 'numeric', month: 'long',
+            hour: 'numeric', minute: '2-digit'
+          });
+        } catch (err) { stamp = stamp.toString(); }
         document.getElementById('doneMessage').textContent =
           (res.demo ? 'Preview mode: nothing was saved, but every answer passed validation. '
-                    : '') + form.confirmation;
+                    : '') + 'Submitted ' + stamp + '.';
+
+        // Name the role back to them. Someone who tapped three different ads
+        // should not have to work out which one this receipt belongs to.
+        // The trailing "Application" is stripped because one form is titled
+        // "Onlyfans Chatter Application", which otherwise reads "you applied for
+        // ... Application". No real job title ends in that word, so this is safe
+        // for every role including any added later.
+        document.getElementById('doneRole').textContent =
+          'You applied for ' + form.title.replace(/\s+Application$/i, '') + '.';
+
+        // Echo the address we will reply to, read from the payload we just sent
+        // rather than the DOM. A mistyped email is the single error that makes a
+        // good applicant unreachable, and this is the last moment they can spot it.
+        var emailQ = questions.filter(function (q) { return q.type === 'email'; })[0];
+        var applicantEmail = emailQ ? String(answers[emailQ.fid] || '') : '';
+        if (applicantEmail) {
+          document.getElementById('doneEmailStep').textContent =
+            'If you are shortlisted, we will email you at ' + applicantEmail + '.';
+        }
+
         done.setAttribute('data-show', 'true');
         done.scrollIntoView({ block: 'center' });
         if (window.fbq) window.fbq('track', 'SubmitApplication', { content_name: form.title });
@@ -655,16 +834,30 @@
       });
     }
 
+    var startedAt = Date.now();
     loadDraft();
     paint();
 
-    if (CFG.TRACK_PAGE_VIEWS) {
+    // A local preview must not write to the production "Page Views" tab. Opening
+    // this page on localhost a few times while testing is enough to move the
+    // completion rate that tab exists to measure. postings-live.js already treats
+    // localhost as a separate world; this ping now does too.
+    var isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+
+    if (CFG.TRACK_PAGE_VIEWS && !isLocal) {
       post({ action: 'view', role: form.key, context: context() })
         .catch(function () { /* a blocked ping must never break the form */ });
     }
   }
 
   /* ================================ boot ================================ */
+
+  // postings-live.js merges the admin app's live postings into WUNDER_FORMS
+  // (in place, so FORMS above sees them) and then asks for a re-render.
+  window.WUNDER_RERENDER = function () {
+    if (PAGE === 'index') renderIndex();
+    if (PAGE === 'apply') renderApply();
+  };
 
   if (PAGE === 'index') renderIndex();
   if (PAGE === 'apply') renderApply();
