@@ -1,6 +1,6 @@
 # Wunder Management — careers site
 
-The public careers site: 8 open roles, each with its job ad and a 4-step
+The public careers site: 9 open roles, each with its job ad and a 4-step
 application form. Static files only — no build step, no server.
 
 **This repo is a deploy target, not the source of truth.** The forms are generated
@@ -12,9 +12,9 @@ from `careers_site/spec/generate_site_specs.py` in the private repo
 
 | Path | What it is |
 |---|---|
-| `index.html` | The 8 roles, filterable by team |
-| `apply.html` | Job ad + application form, one page for all 8 roles (`?role=KEY`) |
-| `assets/forms.js` | **Generated.** All 8 forms, 127 questions |
+| `index.html` | The 9 roles, filterable by team |
+| `apply.html` | Job ad + application form, one page for all 9 roles (`?role=KEY`) |
+| `assets/forms.js` | **Generated.** All 9 forms |
 | `assets/config.js` | The intake endpoint and a few switches |
 | `assets/app.js`, `assets/styles.css` | Form engine and styling |
 | `render.yaml` | Render static-site config |
@@ -30,7 +30,7 @@ this repo — the endpoint is public by necessity, since applicants' browsers ca
 
 `chatters`, `qa_monitor`, `lead_researcher`, `creator_growth_manager`,
 `reels_video_editor`, `head_shortform_editing`, `instagram_dm_setter`,
-`appointment_setter`
+`appointment_setter`, `team_assistant`
 
 Ad links look like:
 `https://<site>/apply.html?role=chatters&utm_source=meta&utm_content=hook_a&angle=pay`
