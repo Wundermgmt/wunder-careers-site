@@ -45,82 +45,6 @@
    * Questions asked for a role created in the admin tool, which has ad copy but
    * no question set of its own. Deliberately short: name, contact, CV, why.
    */
-  /**
-   * Job copy is rich text - headings, lists, links - so it cannot simply be
-   * escaped without destroying every ad. But it arrives over the network and
-   * lands in innerHTML, so it cannot be trusted either: anything that can write
-   * a posting can otherwise run script on this page, and this page collects
-   * names, phone numbers and CV uploads.
-   *
-   * So: parse it in an inert document (DOMParser runs nothing and loads
-   * nothing), keep only the tags the ad copy actually uses, and drop every
-   * attribute except a safe href/target/rel on a link.
-   */
-  var ALLOWED = { P: 1, BR: 1, H2: 1, H3: 1, H4: 1, UL: 1, OL: 1, LI: 1,
-                  STRONG: 1, B: 1, EM: 1, I: 1, A: 1, HR: 1 };
-
-  // Removed with their contents, rather than unwrapped - nobody wants the body
-  // of a <script> surfacing as visible copy.
-  var DROP = { SCRIPT: 1, STYLE: 1, IFRAME: 1, OBJECT: 1, EMBED: 1, NOSCRIPT: 1,
-               TEMPLATE: 1, SVG: 1, MATH: 1, LINK: 1, META: 1, FORM: 1,
-               INPUT: 1, BUTTON: 1, TEXTAREA: 1, SELECT: 1 };
-
-  function sanitizeAdHtml(html) {
-    if (!html) return '';
-    if (typeof DOMParser !== 'function') return '';
-    var doc;
-    try {
-      doc = new DOMParser().parseFromString(String(html), 'text/html');
-    } catch (e) {
-      return '';
-    }
-    if (!doc || !doc.body) return '';
-
-    // Depth first, so a node's children are already clean by the time an
-    // unsupported wrapper around them is unwrapped.
-    function clean(node) {
-      Array.prototype.slice.call(node.childNodes).forEach(clean);
-      if (node.nodeType === 8) { node.parentNode.removeChild(node); return; }
-      if (node.nodeType !== 1) return;
-
-      var tag = node.tagName.toUpperCase();
-      if (DROP[tag]) { node.parentNode.removeChild(node); return; }
-
-      if (!ALLOWED[tag]) {
-        // Keep the words, lose the tag.
-        var parent = node.parentNode;
-        while (node.firstChild) parent.insertBefore(node.firstChild, node);
-        parent.removeChild(node);
-        return;
-      }
-
-      Array.prototype.slice.call(node.attributes).forEach(function (attr) {
-        var name = attr.name.toLowerCase();
-        var keep = tag === 'A' && (name === 'href' || name === 'target' || name === 'rel');
-        if (!keep) { node.removeAttribute(attr.name); return; }
-        // javascript:, data:, vbscript: and friends.
-        if (name === 'href' && !/^(https?:|mailto:)/i.test(String(attr.value).trim())) {
-          node.removeAttribute('href');
-        }
-      });
-
-      if (tag === 'A') {
-        node.setAttribute('target', '_blank');
-        node.setAttribute('rel', 'noopener noreferrer');
-      }
-    }
-
-    // Walk body's CHILDREN, never body itself: BODY is not in the allowlist, so
-    // handing it to clean() would unwrap the element out of its own document.
-    Array.prototype.slice.call(doc.body.childNodes).forEach(clean);
-    return doc.body.innerHTML;
-  }
-
-  // Plain text only - a summary is one line on a card, never markup.
-  function sanitizeText(v) {
-    return String(v == null ? '' : v).replace(/[<>]/g, '');
-  }
-
   function defaultSteps(key) {
     return [
       {
@@ -158,7 +82,7 @@
         hours: p.hours || '',
         summary: p.summary || ''
       },
-      adHtml: sanitizeAdHtml(p.description) || '<p>' + sanitizeText(p.summary) + '</p>',
+      adHtml: p.description || '<p>' + (p.summary || '') + '</p>',
       confirmation: 'Thank you for applying. We review every application and will email you if you are shortlisted.',
       hidden: [{ fid: 'live_' + p.key + '_angle', type: 'short', required: false, title: 'Source Angle', hidden: true }],
       steps: defaultSteps(p.key),
@@ -198,12 +122,7 @@
       if (p.earnings) f.card.range = p.earnings;
       if (p.hours) f.card.hours = p.hours;
       if (p.summary) f.card.summary = p.summary;
-      if (p.description) {
-        var safe = sanitizeAdHtml(p.description);
-        // An empty result means the posting was nothing but markup we refuse to
-        // render. Keep the baked copy rather than blanking the role's page.
-        if (safe) f.adHtml = safe;
-      }
+      if (p.description) f.adHtml = p.description;
       delete byKey[f.key];
     });
 

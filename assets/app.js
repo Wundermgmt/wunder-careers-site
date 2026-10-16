@@ -273,10 +273,42 @@
    * couple of breather screens. The counter deliberately counts QUESTIONS only,
    * so a breather does not make the applicant think they answered something.
    */
+  // Files are collected as links, not uploads. Since 16 Sep 2026 the intake could
+  // not save an upload (the Workspace policy rejects its public-link step), so
+  // every application with a file was lost. The question keeps its fid, so the
+  // intake files the link in the same column the upload used to land in.
+  var LINK_HELP = 'Paste a link to your file (Google Drive, Dropbox or OneDrive). ' +
+                  'Set sharing to "Anyone with the link" so we can open it.';
+
+  function asLink(q) {
+    if (q.type !== 'file') return q;
+    var copy = {};
+    Object.keys(q).forEach(function (k) { copy[k] = q[k]; });
+    copy.type = 'url';
+    copy.fileAsLink = true;
+    copy.help = q.help ? q.help + ' ' + LINK_HELP : LINK_HELP;
+    // Every role requires a CV (Jio, 2026-09-28). The intake's own schema still
+    // marks some CVs optional, so remember what IT requires: only those get the
+    // placeholder file below, and the rest keep a clean link in their cell.
+    copy.intakeRequires = !!q.required;
+    if (isCv(q) || isChatterTypingTest(q)) copy.required = true;
+    return copy;
+  }
+
+  // The Chatter screener counts a blank typing-test link as an incomplete
+  // application and fails it (Jio, 2026-10-12), so the page asks for it too.
+  function isChatterTypingTest(q) {
+    return q.fid === 'fldwpnxx2kWfXljcR';
+  }
+
+  function isCv(q) {
+    return /\bCV\b|r[eé]sum[eé]/i.test(q.title || '');
+  }
+
   function buildScreens(form) {
     var qs = [];
     form.steps.forEach(function (step) {
-      step.questions.forEach(function (q) { qs.push({ kind: 'q', q: q, group: step.title }); });
+      step.questions.forEach(function (q) { qs.push({ kind: 'q', q: asLink(q), group: step.title }); });
     });
 
     // Two at most. More reads as padding, and every extra screen is another
@@ -483,13 +515,40 @@
           type: types[q.type] || 'text', id: id, name: q.fid,
           'aria-describedby': described,
           autocomplete: autoComplete(q),
-          inputmode: q.type === 'number' ? 'numeric' : null
+          inputmode: q.type === 'number' ? 'numeric' : null,
+          placeholder: q.fileAsLink ? 'https://drive.google.com/…' : null
         });
         wrapEl.appendChild(input);
+        if (q.fileAsLink) wrapEl.appendChild(linkHowTo());
       }
 
       wrapEl.appendChild(el('p', { class: 'error', id: errId, 'aria-live': 'polite' }));
       return wrapEl;
+    }
+
+    // Most applicants arrive from a Facebook ad on a phone, where getting a
+    // shareable link is the step most likely to lose them. Closed by default so
+    // it costs nothing for anyone who already knows how.
+    function linkHowTo() {
+      var steps = [
+        ['Open the ', 'Google Drive', ' app, tap ', '+', ', then ', 'Upload', ', and pick your file.'],
+        ['Tap ', '⋮', ' next to the file, then ', 'Share', '. Under General access, change ',
+         'Restricted', ' to ', 'Anyone with the link', '.'],
+        ['Tap ', 'Copy link', ', come back here, and paste it above.']
+      ];
+      var box = el('details', { class: 'howto' });
+      box.appendChild(el('summary', null, 'How to get a shareable Google Drive link'));
+      var list = el('ol');
+      steps.forEach(function (parts) {
+        var li = el('li');
+        // Odd pieces are the words the applicant will see on screen.
+        parts.forEach(function (text, i) {
+          li.appendChild(i % 2 ? el('b', null, text) : document.createTextNode(text));
+        });
+        list.appendChild(li);
+      });
+      box.appendChild(list);
+      return box;
     }
 
     function autoComplete(q) {
@@ -564,6 +623,7 @@
 
       if (q.required && empty) {
         showError(q.fid, q.type === 'file' ? 'Please attach a file.'
+                       : q.fileAsLink ? 'Please paste a link to your file.'
                        : (q.type === 'choice' || q.type === 'multi') ? 'Please choose an answer.'
                        : 'This one is required.');
         return false;
@@ -576,6 +636,10 @@
       }
       if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) {
         showError(q.fid, 'Please include the full number with country code.');
+        return false;
+      }
+      if (q.fileAsLink && !/^https?:\/\/[^\s.]+\.\S+$/i.test(v)) {
+        showError(q.fid, 'Please paste the full link, starting with https://');
         return false;
       }
       if (q.minChars && String(v).trim().length < q.minChars) {
@@ -773,10 +837,20 @@
       busy('Sending');
       banner.removeAttribute('data-show');
 
+      // The intake still insists a required file question arrives as a file. An
+      // empty one is skipped before any Drive call, so it only satisfies that check;
+      // the link itself travels in answers.
+      var sentFiles = Object.keys(files).map(function (k) { return files[k]; });
+      questions.forEach(function (q) {
+        if (q.fileAsLink && q.intakeRequires && answers[q.fid]) {
+          sentFiles.push({ fid: q.fid, name: 'link', mimeType: 'text/uri-list', data: '' });
+        }
+      });
+
       post({
         role: form.key,
         answers: answers,
-        files: Object.keys(files).map(function (k) { return files[k]; }),
+        files: sentFiles,
         honeypot: (document.getElementById('hp') || {}).value || '',
         context: context({
           time_to_complete_sec: Math.round((Date.now() - startedAt) / 1000)
@@ -833,6 +907,9 @@
         if (typeof nextUrl === 'string' && WORKSTYLE_NEXT_RE.test(nextUrl)) {
           document.getElementById('doneWorkstyleLink').setAttribute('href', nextUrl);
           document.getElementById('doneWorkstyle').hidden = false;
+          // The interim "coming soon" notice would contradict a live Step 2.
+          var soon = document.getElementById('doneWorkstyleSoon');
+          if (soon) soon.hidden = true;
           var firstStep = document.querySelector('.done__next li');
           if (firstStep) firstStep.textContent = 'Your answers are saved. Finish the Workstyle Profile above.';
         }
