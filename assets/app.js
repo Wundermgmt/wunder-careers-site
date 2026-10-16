@@ -125,6 +125,10 @@
     var filters = document.getElementById('filters');
     if (!grid) return;
 
+    // Counted, not typed: the hard-coded "8" outlived the ninth role.
+    var count = document.getElementById('roleCount');
+    if (count) count.textContent = FORMS.length + (FORMS.length === 1 ? ' open position' : ' open positions');
+
     var teams = ['All'];
     FORMS.forEach(function (f) {
       if (teams.indexOf(f.card.team) === -1) teams.push(f.card.team);
