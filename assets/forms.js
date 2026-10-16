@@ -732,8 +732,8 @@ window.WUNDER_FORMS = [
     "airtablePage": "",
     "card": {
       "team": "Operations",
-      "pay": "$500/month",
-      "range": "$500 / month",
+      "pay": "$500/month, paid in USD",
+      "range": "Fixed $500 / month",
       "hours": "12PM-8PM PH time, 6-day week",
       "summary": "Run the day-to-day of our hiring: screen applicants, book interviews, onboard new hires and keep the schedule straight."
     },
