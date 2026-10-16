@@ -56,6 +56,11 @@
     return node;
   }
 
+  // The one place a careers-site applicant is sent after submitting: the HR
+  // portal's one-time Workstyle handoff page (wunder-hr-suite workstyle-handoff.js).
+  var WORKSTYLE_NEXT_RE =
+    /^https:\/\/wunderportal\.com\/hr\/hiring-admin\/app\/continue\/wh1\.[A-Za-z0-9_-]{32,128}$/;
+
   var TRACKED = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content',
                  'utm_term', 'fbclid', 'angle', 'source'];
 
@@ -815,6 +820,17 @@
         if (applicantEmail) {
           document.getElementById('doneEmailStep').textContent =
             'If you are shortlisted, we will email you at ' + applicantEmail + '.';
+        }
+
+        // Roles with a Workstyle step get it back from the backend as the next
+        // part of the application. Only the HR portal's own one-time handoff
+        // URL is accepted, so a tampered response cannot send applicants away.
+        var nextUrl = res.next && res.next.workstyleUrl;
+        if (typeof nextUrl === 'string' && WORKSTYLE_NEXT_RE.test(nextUrl)) {
+          document.getElementById('doneWorkstyleLink').setAttribute('href', nextUrl);
+          document.getElementById('doneWorkstyle').hidden = false;
+          var firstStep = document.querySelector('.done__next li');
+          if (firstStep) firstStep.textContent = 'Your answers are saved. Finish the Workstyle Profile above.';
         }
 
         done.setAttribute('data-show', 'true');

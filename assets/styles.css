@@ -396,6 +396,18 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] {
 /* The steps are the one part that must not be centred - a centred ordered list
    has no common left edge, so the eye cannot scan it. Centre the BOX, left-align
    the text inside it. */
+.done__step {
+  margin: 28px auto 0; max-width: 460px; padding: 22px; text-align: left;
+  border: 1.5px solid var(--ink); border-radius: var(--r-lg); background: var(--paper);
+}
+.done__step[hidden] { display: none; }
+.done__step-k {
+  margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted) !important;
+}
+.done__step h3 { margin: 6px 0 8px; font-size: 20px; }
+.done__step p { font-size: 15px; }
+.done__step .btn { margin-top: 14px; }
 .done__next {
   margin: 30px auto 0; max-width: 420px; text-align: left;
   border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px;
