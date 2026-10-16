@@ -724,6 +724,187 @@ window.WUNDER_FORMS = [
     ]
   },
   {
+    "key": "team_assistant",
+    "title": "Team Assistant (HR & Recruitment)",
+    "roleCode": "TA",
+    "tableId": "tblTeamAssist2026",
+    "tabFallback": "Team Assistant",
+    "airtablePage": "",
+    "card": {
+      "team": "Operations",
+      "pay": "$500/month",
+      "range": "$500 / month",
+      "hours": "12PM-8PM PH time, 6-day week",
+      "summary": "Run the day-to-day of our hiring: screen applicants, book interviews, onboard new hires and keep the schedule straight."
+    },
+    "adHtml": "<h3>Team Assistant (HR &amp; Recruitment)</h3>\n<h3>Remote, Philippines | Full-time contractor</h3>\n<h3>Who you are joining</h3>\n<p>Wunder Management is a European-led creator growth agency with a 25-person remote team. A large part of our team is based in the Philippines. Our creators' content has generated more than 3 billion organic views across Instagram and TikTok.<br>Some of the creators we work with also run OnlyFans pages. You will not create content or chat with fans, but you will hire the people who do.<br>Website: <a href=\"https://wundermgmt.com/\" target=\"_blank\" rel=\"noopener\">https://wundermgmt.com/</a></p>\n<h3>The role</h3>\n<p>We are hiring one Team Assistant to run the day-to-day of our hiring and HR. You will work directly with our hiring lead and keep every open role moving, from the first application to the new hire's first shift.</p>\n<h3>What you will do</h3>\n<ul><li>Screen new applications every day, about 20 a day across our open roles</li><li>Send assessments, interview invites and follow-ups to candidates</li><li>Book interviews on Google Meet, join them and take the notes</li><li>Send offers and set up new hires on Discord before their first shift</li><li>Keep the team's shift schedule and the hiring Sheet up to date</li><li>Draft HR notices and handle the paperwork when someone leaves</li></ul>\n<h3>Who we want</h3>\n<ul><li>Organised: you can keep track of many people at once</li><li>Good written English: most of the job is email and chat</li><li>Comfortable with Google Sheets, Gmail and Google Calendar</li><li>Discreet with people's personal details</li><li>HR, recruitment or admin experience helps, but is not required</li></ul>\n<h3>Pay and schedule</h3>\n<ul><li>$500 a month, paid in USD</li><li>Monday to Saturday, 12 PM to 8 PM Philippine time</li><li>Fully remote, with a stable internet connection and a backup</li></ul>\n<h3>How to apply</h3>\n<p>Fill in the form below. We review every application and will email you if you are shortlisted.</p>",
+    "confirmation": "Thank you for applying. We review every application and will email you if you are shortlisted.",
+    "hidden": [
+      {
+        "fid": "fldTeamAssist0016",
+        "type": "short",
+        "required": false,
+        "title": "Ad Source",
+        "hidden": true
+      }
+    ],
+    "steps": [
+      {
+        "title": "Your details",
+        "blurb": "Name, contact and where you are based.",
+        "questions": [
+          {
+            "fid": "fldTeamAssist0001",
+            "type": "short",
+            "required": true,
+            "title": "What is your full name?"
+          },
+          {
+            "fid": "fldTeamAssist0002",
+            "type": "email",
+            "required": true,
+            "title": "What is your email address?"
+          },
+          {
+            "fid": "fldTeamAssist0003",
+            "type": "phone",
+            "required": true,
+            "title": "What is your WhatsApp number? Include the country code.",
+            "help": "Include the country code, for example +63 917 123 4567."
+          },
+          {
+            "fid": "fldTeamAssist0004",
+            "type": "short",
+            "required": true,
+            "title": "Which city and province do you live in?"
+          }
+        ]
+      },
+      {
+        "title": "Role requirements",
+        "blurb": "Quick yes/no checks so we only take your time if this is a fit.",
+        "questions": [
+          {
+            "fid": "fldTeamAssist0005",
+            "type": "choice",
+            "required": true,
+            "title": "What is your English Level?",
+            "choices": [
+              "Basic (A1-A2)",
+              "Intermediate (B1)",
+              "Advanced (B2)",
+              "Native/Full Fluency (C1-C2)"
+            ]
+          },
+          {
+            "fid": "fldTeamAssist0006",
+            "type": "choice",
+            "required": true,
+            "title": "Can you work Monday to Saturday, 12 PM to 8 PM Philippine time?",
+            "choices": [
+              "Yes",
+              "No"
+            ]
+          },
+          {
+            "fid": "fldTeamAssist0007",
+            "type": "choice",
+            "required": true,
+            "title": "The pay is $500 a month, paid in USD. Does that work for you?",
+            "choices": [
+              "Yes",
+              "No"
+            ]
+          },
+          {
+            "fid": "fldTeamAssist0008",
+            "type": "choice",
+            "required": true,
+            "title": "How much HR, recruitment or admin experience do you have?",
+            "choices": [
+              "None yet",
+              "Under 1 year",
+              "1-2 years",
+              "3+ years"
+            ]
+          },
+          {
+            "fid": "fldTeamAssist0009",
+            "type": "choice",
+            "required": true,
+            "title": "Some of our creators also run OnlyFans pages. You will not create content or chat with fans, but you will hire people who do. Are you comfortable with that?",
+            "choices": [
+              "Yes",
+              "No"
+            ]
+          },
+          {
+            "fid": "fldTeamAssist0010",
+            "type": "choice",
+            "required": true,
+            "title": "Do you have a backup internet connection?",
+            "choices": [
+              "Yes",
+              "No"
+            ]
+          },
+          {
+            "fid": "fldTeamAssist0011",
+            "type": "choice",
+            "required": true,
+            "title": "Can you start working full-time within the next 7 days?",
+            "choices": [
+              "Yes",
+              "No"
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Your experience",
+        "blurb": "The part we actually read. Specific beats polished.",
+        "questions": [
+          {
+            "fid": "fldTeamAssist0012",
+            "type": "paragraph",
+            "required": true,
+            "title": "Tell us about any hiring, HR or admin work you have done. What did you do, for how many people, and with which tools? (80-150 words)",
+            "minChars": 40
+          },
+          {
+            "fid": "fldTeamAssist0013",
+            "type": "paragraph",
+            "required": true,
+            "title": "A candidate missed their interview and did not message us. Write the exact message you would send them. (40-100 words)",
+            "minChars": 40
+          },
+          {
+            "fid": "fldTeamAssist0014",
+            "type": "paragraph",
+            "required": true,
+            "title": "In 50-100 words, why do you want this job?",
+            "minChars": 40
+          }
+        ]
+      },
+      {
+        "title": "Documents",
+        "blurb": "Last step.",
+        "questions": [
+          {
+            "fid": "fldTeamAssist0015",
+            "type": "file",
+            "required": true,
+            "accept": ".pdf,.doc,.docx",
+            "hint": "PDF preferred, up to 8 MB.",
+            "title": "Please submit your CV."
+          }
+        ]
+      }
+    ],
+    "siteOnly": true
+  },
+  {
     "key": "chatters",
     "title": "Onlyfans Chatter Application",
     "roleCode": "CH",
