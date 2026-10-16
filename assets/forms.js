@@ -902,7 +902,8 @@ window.WUNDER_FORMS = [
         ]
       }
     ],
-    "siteOnly": true
+    "siteOnly": true,
+    "workstyleNext": true
   },
   {
     "key": "chatters",
