@@ -1,11 +1,18 @@
 # Render Blueprint for the Wunder Management careers site.
-# Standalone repo: the site is at the repo root, so no root-directory setting.
+#
+# The site is static files, so there is no build step and nothing to keep warm.
+# The whole repo IS the site, which is why staticPublishPath is the root - it
+# exists so this repo can be connected through Render's GitHub App and get
+# autoDeploy, instead of the "Public Git Repository" URL field that installs no
+# webhook and therefore requires a manual deploy for every change.
 services:
   - type: web
     name: wunder-careers
     runtime: static
     buildCommand: ""
     staticPublishPath: .
+    autoDeploy: true
+
     headers:
       - path: /*
         name: X-Content-Type-Options
@@ -16,6 +23,8 @@ services:
       - path: /*
         name: X-Frame-Options
         value: SAMEORIGIN
+      # forms.js and app.js change whenever the spec is regenerated, so they must
+      # not be cached hard. The HTML is tiny; revalidating it costs nothing.
       - path: /assets/*
         name: Cache-Control
         value: public, max-age=300, must-revalidate
