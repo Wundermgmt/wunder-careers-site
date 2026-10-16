@@ -727,7 +727,7 @@ window.WUNDER_FORMS = [
     "key": "team_assistant",
     "title": "Team Assistant (HR & Recruitment)",
     "roleCode": "TA",
-    "tableId": "tblTeamAssist2026",
+    "tableId": "tbl_site_team_assistant",
     "tabFallback": "Team Assistant",
     "airtablePage": "",
     "card": {
