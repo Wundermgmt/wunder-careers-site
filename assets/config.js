@@ -1,13 +1,19 @@
 /**
  * config.js - the only file you edit by hand.
  *
- * After deploying the Apps Script web app, paste its /exec URL into ENDPOINT.
+ * ENDPOINT is where applications and page views are posted.
  * Everything else has a sensible default.
  */
 window.WUNDER_CONFIG = {
-  // Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone)
-  // then copy the URL that ends in /exec.
-  ENDPOINT: "https://script.google.com/macros/s/AKfycbwj6w_hsJV1rwMxPO4keTQycKNiKMzCi0vNWiKUbmjasopV3w7oZSR422p_2DQlEWBv6g/exec",
+  // The careers intake behind the Wunder Portal (wunder-hr-suite,
+  // wunder-hr-app/lib/hiring/careers-intake.js). It writes the same rows to the
+  // Master Sheet that the Apps Script web app did.
+  //
+  // The Apps Script web app (.../macros/s/AKfycbwj6w_hsJV1rwMxPO4keTQycKNiKMzCi0vNWiKUbmjasopV3w7oZSR422p_2DQlEWBv6g/exec)
+  // stopped taking applications on 2026-10-16: Workspace sharing limits it to
+  // "Anyone in KG Management", so applicants got a Google sign-in and
+  // "Failed to fetch". Switch back only if it is deployed to "Anyone" again.
+  ENDPOINT: "https://wunderportal.com/hr/hiring-admin/app/careers/apply",
 
   // Logs one row per page open to the "Page Views" tab. Applications divided by
   // page views is the real completion rate, measured on our side rather than
