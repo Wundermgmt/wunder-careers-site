@@ -56,10 +56,12 @@
     return node;
   }
 
-  // The one place a careers-site applicant is sent after submitting: the HR
-  // portal's one-time Workstyle handoff page (wunder-hr-suite workstyle-handoff.js).
+  // The only places a careers-site applicant is sent after submitting, both on
+  // the HR portal: their own Workstyle invite, which the portal intake creates
+  // (wunder-hr-suite careers-intake.js), or the older one-time handoff page
+  // the Apps Script intake used (workstyle-handoff.js).
   var WORKSTYLE_NEXT_RE =
-    /^https:\/\/wunderportal\.com\/hr\/hiring-admin\/app\/continue\/wh1\.[A-Za-z0-9_-]{32,128}$/;
+    /^https:\/\/wunderportal\.com\/(workstyle\/[A-Za-z0-9._-]{32,384}|hr\/hiring-admin\/app\/continue\/wh1\.[A-Za-z0-9_-]{32,128})$/;
 
   var TRACKED = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content',
                  'utm_term', 'fbclid', 'angle', 'source'];
@@ -901,8 +903,8 @@
         }
 
         // Roles with a Workstyle step get it back from the backend as the next
-        // part of the application. Only the HR portal's own one-time handoff
-        // URL is accepted, so a tampered response cannot send applicants away.
+        // part of the application. Only the HR portal's own Workstyle URLs are
+        // accepted, so a tampered response cannot send applicants away.
         var nextUrl = res.next && res.next.workstyleUrl;
         if (typeof nextUrl === 'string' && WORKSTYLE_NEXT_RE.test(nextUrl)) {
           document.getElementById('doneWorkstyleLink').setAttribute('href', nextUrl);
