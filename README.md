@@ -3,8 +3,8 @@
 > **Company copy.** The live site deploys from
 > [`jio-wunder/careers-site`](https://github.com/jio-wunder/careers-site), a personal
 > account. This repo is the company-owned copy of it, so Wunder keeps the website if that
-> account is ever gone. As of the last sync it matches `jio-wunder/careers-site` @ `c8dd765`
-> (Team Assistant added).
+> account is ever gone. As of the last sync it matches `jio-wunder/careers-site` @ `cecad8d`
+> (Team Assistant added; applications go to the portal intake).
 >
 > **To take the site over from this repo** (keeps the same URL, so the Meta ads keep working):
 > 1. Render → service **wunder-careers-site** → **Settings** → **Repository** → **Edit** →
