@@ -98,17 +98,77 @@
     return ctx;
   }
 
+  // How long one try may take before it counts as lost. The intake answers in
+  // about 5 s (p50, October 2026), so this only ever ends a stalled connection.
+  var SEND_TIMEOUT_MS = 45000;
+
+  // A failure where the intake never answered: no connection, a timeout, or a
+  // proxy's error page instead of the intake's JSON. Worth trying again, unlike
+  // an answer the intake did give.
+  function unreachable(why) {
+    var err = new Error('We could not reach our server (' + why + '), ' +
+                        'so your application has not been sent yet.');
+    err.unreachable = true;
+    return err;
+  }
+
   function post(payload) {
     if (DEMO) {
       console.info('[demo mode] ENDPOINT is not set, nothing was sent:', payload);
       return Promise.resolve({ ok: true, demo: true });
     }
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, SEND_TIMEOUT_MS) : null;
     return fetch(CFG.ENDPOINT, {
       method: 'POST',
       // text/plain avoids a CORS preflight that Apps Script cannot answer.
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json(); });
+      body: JSON.stringify(payload),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      clearTimeout(timer);
+      // The browser's own words for a non-JSON reply ("The string did not match
+      // the expected pattern.") mean nothing to an applicant, so name it.
+      return r.json().catch(function () {
+        throw unreachable('it sent back an error page, HTTP ' + r.status);
+      });
+    }, function () {
+      clearTimeout(timer);
+      throw unreachable(ctrl && ctrl.signal.aborted ? 'it took too long to answer'
+                                                    : 'the connection dropped');
+    });
+  }
+
+  /**
+   * An application gets three tries before the applicant sees an error.
+   *
+   * WHY: a single failed request used to end the application. Applicants arrive
+   * on mobile data inside the Facebook and Instagram in-app browsers, the intake
+   * holds each request open for about 5 s, and a dropped connection, a portal
+   * restart or a proxy error page all ended the same way: a browser message
+   * nobody could act on ("Load failed") and nothing saved. On 2026-10-21 an
+   * applicant wrote in that the error "keeps happening"; they are not in the
+   * Sheet.
+   *
+   * Only `unreachable` failures are retried. Whatever the intake does answer -
+   * ok, or ok:false with its reason - is final. A retry after a reply was lost
+   * is not saved twice: the intake answers the same role and email within two
+   * minutes as a duplicate (careers-intake.js, DUPLICATE_WINDOW_MS).
+   */
+  var SEND_RETRY_WAITS_MS = [2000, 5000];
+
+  function postWithRetry(payload, onRetry) {
+    var tries = 0;
+    function attempt() {
+      return post(payload).catch(function (err) {
+        if (!err.unreachable || tries >= SEND_RETRY_WAITS_MS.length) throw err;
+        var waitMs = SEND_RETRY_WAITS_MS[tries];
+        tries += 1;
+        if (onRetry) onRetry(tries);
+        return new Promise(function (resolve) { setTimeout(resolve, waitMs); }).then(attempt);
+      });
+    }
+    return attempt();
   }
 
   function carryParams(url) {
@@ -849,7 +909,7 @@
         }
       });
 
-      post({
+      postWithRetry({
         role: form.key,
         answers: answers,
         files: sentFiles,
@@ -857,7 +917,7 @@
         context: context({
           time_to_complete_sec: Math.round((Date.now() - startedAt) / 1000)
         })
-      }).then(function (res) {
+      }, function () { busy('Still sending'); }).then(function (res) {
         if (!res || !res.ok) throw new Error((res && res.error) || 'Unknown error');
         // Order matters: stop the autosave first, or the debounced write lands
         // after the delete and the applicant is told their answers were restored.
