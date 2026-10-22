@@ -111,6 +111,35 @@
     }).then(function (r) { return r.json(); });
   }
 
+  /**
+   * Sends one picked file to the portal, which saves it privately and answers
+   * with its Drive link. XHR rather than fetch, for the progress percentage on a
+   * slow phone connection. text/plain keeps it a simple request (no preflight).
+   */
+  function uploadFile(role, q, file, onProgress) {
+    return new Promise(function (resolve, reject) {
+      if (DEMO || !CFG.UPLOAD_ENDPOINT) { resolve('https://example.invalid/demo-upload'); return; }
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', CFG.UPLOAD_ENDPOINT + '?role=' + encodeURIComponent(role) +
+                       '&fid=' + encodeURIComponent(q.fid));
+      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+      xhr.timeout = 180000;
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((100 * e.loaded) / e.total));
+      };
+      xhr.onload = function () {
+        var res = null;
+        try { res = JSON.parse(xhr.responseText); } catch (err) {}
+        if (res && res.ok && res.url) resolve(res.url);
+        else reject(new Error((res && res.error) || 'We could not upload that file. Please try again.'));
+      };
+      xhr.onerror = xhr.ontimeout = function () {
+        reject(new Error('The upload did not go through. Check your connection and pick the file again.'));
+      };
+      xhr.send(file);
+    });
+  }
+
   function carryParams(url) {
     var p = params();
     var keys = Object.keys(p);
@@ -275,29 +304,22 @@
    * couple of breather screens. The counter deliberately counts QUESTIONS only,
    * so a breather does not make the applicant think they answered something.
    */
-  // Files are collected as links, not uploads. Since 16 Sep 2026 the intake could
-  // not save an upload (the Workspace policy rejects its public-link step), so
-  // every application with a file was lost. The question keeps its fid, so the
-  // intake files the link in the same column the upload used to land in.
-  var LINK_HELP = 'Paste a link to your file (Google Drive, Dropbox or OneDrive). ' +
-                  'Set sharing to "Anyone with the link" so we can open it.';
-
-  function asLink(q) {
+  // Files are uploaded straight from the phone to the portal, which saves them
+  // privately in Drive and hands back a link (see uploadFile). For two weeks
+  // after 16 Sep 2026 uploads were switched off for pasted links, because the old
+  // intake could not save a file; on a phone, pasting a link is the step that lost
+  // most applicants, so a link is now only the fallback under the file picker.
+  // Every role requires a CV (Jio, 2026-09-28). The intake's own schema still
+  // marks some CVs optional, so the page decides.
+  function fileRules(q) {
     if (q.type !== 'file') return q;
     var copy = {};
     Object.keys(q).forEach(function (k) { copy[k] = q[k]; });
-    copy.type = 'url';
-    copy.fileAsLink = true;
-    copy.help = q.help ? q.help + ' ' + LINK_HELP : LINK_HELP;
-    // Every role requires a CV (Jio, 2026-09-28). The intake's own schema still
-    // marks some CVs optional, so remember what IT requires: only those get the
-    // placeholder file below, and the rest keep a clean link in their cell.
-    copy.intakeRequires = !!q.required;
     if (isCv(q) || isChatterTypingTest(q)) copy.required = true;
     return copy;
   }
 
-  // The Chatter screener counts a blank typing-test link as an incomplete
+  // The Chatter screener counts a blank typing-test answer as an incomplete
   // application and fails it (Jio, 2026-10-12), so the page asks for it too.
   function isChatterTypingTest(q) {
     return q.fid === 'fldwpnxx2kWfXljcR';
@@ -310,7 +332,7 @@
   function buildScreens(form) {
     var qs = [];
     form.steps.forEach(function (step) {
-      step.questions.forEach(function (q) { qs.push({ kind: 'q', q: asLink(q), group: step.title }); });
+      step.questions.forEach(function (q) { qs.push({ kind: 'q', q: fileRules(q), group: step.title }); });
     });
 
     // Two at most. More reads as padding, and every extra screen is another
@@ -356,8 +378,8 @@
                            .map(function (s) { return s.q; });
     var total = questions.length;
     var current = 0;
-    var files = {};                 // fid -> {name, mimeType, data}
-    var reading = {};               // fid -> Promise, resolved when the read finishes
+    var uploaded = {};              // fid -> Drive link of the file the portal saved
+    var reading = {};               // fid -> Promise, resolved when that upload finishes
     var submitted = false;          // stops the autosave resurrecting a sent draft
     var draftKey = 'wunder-draft-' + form.key;
 
@@ -451,7 +473,7 @@
 
         fileInput.addEventListener('change', function () {
           var file = fileInput.files && fileInput.files[0];
-          delete files[q.fid];
+          delete uploaded[q.fid];
           delete reading[q.fid];
 
           if (!file) { drop.setAttribute('data-has-file', 'false'); return; }
@@ -466,34 +488,47 @@
           }
 
           strong.textContent = file.name;
-          hint.textContent = 'Reading file…';
+          hint.textContent = 'Uploading…';
           drop.setAttribute('data-has-file', 'true');
           clearError(q.fid);
 
-          // Reading is asynchronous. Submit waits on this promise, because a
-          // submit that fires mid-read used to send no file at all - which looks
-          // exactly like an applicant who never attached one.
-          reading[q.fid] = new Promise(function (resolve) {
-            var reader = new FileReader();
-            reader.onload = function () {
-              files[q.fid] = {
-                fid: q.fid, name: file.name,
-                mimeType: file.type || 'application/octet-stream',
-                data: String(reader.result).split(',')[1]
-              };
-              hint.textContent = (file.size / 1024).toFixed(0) + ' KB — tap to replace';
-              resolve();
-            };
-            reader.onerror = function () {
-              hint.textContent = 'Could not read that file';
+          // The upload runs while the applicant reads on. Continue waits for it
+          // (checkCurrent), and submit waits for any that is still running, so a
+          // file is never silently left out of the application.
+          var mine = new Promise(function (resolve) {
+            uploadFile(form.key, q, file, function (pct) {
+              if (reading[q.fid] === mine) hint.textContent = 'Uploading… ' + pct + '%';
+            }).then(function (url) {
+              if (reading[q.fid] !== mine) return;          // replaced by another pick
+              uploaded[q.fid] = url;
+              delete reading[q.fid];
+              hint.textContent = 'Uploaded — tap to replace';
+            }, function (err) {
+              if (reading[q.fid] !== mine) return;
+              delete reading[q.fid];
+              fileInput.value = '';
+              strong.textContent = 'Choose a file';
+              hint.textContent = q.hint || ('Up to ' + (CFG.MAX_FILE_MB || 8) + ' MB.');
               drop.setAttribute('data-has-file', 'false');
-              showError(q.fid, 'This browser could not read that file. ' +
-                               'Please try a different one.');
-              resolve();
-            };
-            reader.readAsDataURL(file);
+              showError(q.fid, String(err.message || err));
+            }).then(resolve);
           });
+          reading[q.fid] = mine;
         });
+
+        // The fallback for someone whose CV only exists as a link (a Google Doc,
+        // a Dropbox file). It is the same answer, so it sits under the picker.
+        var alt = el('details', { class: 'howto' });
+        alt.appendChild(el('summary', null, 'Have a link instead?'));
+        var altBox = el('div', { class: 'field__alt' });
+        altBox.appendChild(el('p', { class: 'field__help' },
+          'Paste a Google Drive, Dropbox or OneDrive link. Set sharing to "Anyone with the link" so we can open it.'));
+        altBox.appendChild(el('input', {
+          type: 'url', id: 'l_' + q.fid, autocomplete: 'off', placeholder: 'https://drive.google.com/…',
+          'aria-label': 'Link to your file'
+        }));
+        alt.appendChild(altBox);
+        wrapEl.appendChild(alt);
 
       } else if (q.type === 'paragraph' || q.type === 'long') {
         var ta = el('textarea', {
@@ -517,40 +552,13 @@
           type: types[q.type] || 'text', id: id, name: q.fid,
           'aria-describedby': described,
           autocomplete: autoComplete(q),
-          inputmode: q.type === 'number' ? 'numeric' : null,
-          placeholder: q.fileAsLink ? 'https://drive.google.com/…' : null
+          inputmode: q.type === 'number' ? 'numeric' : null
         });
         wrapEl.appendChild(input);
-        if (q.fileAsLink) wrapEl.appendChild(linkHowTo());
       }
 
       wrapEl.appendChild(el('p', { class: 'error', id: errId, 'aria-live': 'polite' }));
       return wrapEl;
-    }
-
-    // Most applicants arrive from a Facebook ad on a phone, where getting a
-    // shareable link is the step most likely to lose them. Closed by default so
-    // it costs nothing for anyone who already knows how.
-    function linkHowTo() {
-      var steps = [
-        ['Open the ', 'Google Drive', ' app, tap ', '+', ', then ', 'Upload', ', and pick your file.'],
-        ['Tap ', '⋮', ' next to the file, then ', 'Share', '. Under General access, change ',
-         'Restricted', ' to ', 'Anyone with the link', '.'],
-        ['Tap ', 'Copy link', ', come back here, and paste it above.']
-      ];
-      var box = el('details', { class: 'howto' });
-      box.appendChild(el('summary', null, 'How to get a shareable Google Drive link'));
-      var list = el('ol');
-      steps.forEach(function (parts) {
-        var li = el('li');
-        // Odd pieces are the words the applicant will see on screen.
-        parts.forEach(function (text, i) {
-          li.appendChild(i % 2 ? el('b', null, text) : document.createTextNode(text));
-        });
-        list.appendChild(li);
-      });
-      box.appendChild(list);
-      return box;
     }
 
     function autoComplete(q) {
@@ -579,10 +587,14 @@
 
     function valueOf(q) {
       if (q.type === 'file') {
-        // Read from the input, not from `files`: a file chosen a moment ago may
-        // still be reading, and it counts as attached the instant it is picked.
+        // The saved link wins. A file chosen a moment ago is still uploading and
+        // counts as attached the instant it is picked (checkCurrent holds the
+        // applicant on this screen until it lands). Failing both, a pasted link.
+        if (uploaded[q.fid]) return uploaded[q.fid];
         var node = document.getElementById('q_' + q.fid);
-        return (node && node.files && node.files[0]) ? node.files[0].name : '';
+        if (node && node.files && node.files[0]) return node.files[0].name;
+        var alt = document.getElementById('l_' + q.fid);
+        return alt ? alt.value.trim() : '';
       }
       if (q.type === 'multi') {
         return Array.prototype.slice.call(
@@ -620,12 +632,15 @@
       var q = s.q;
 
       clearError(q.fid);
+      if (q.type === 'file' && reading[q.fid]) {
+        showError(q.fid, 'Still uploading. One moment, then tap Continue.');
+        return false;
+      }
       var v = valueOf(q);
       var empty = Array.isArray(v) ? v.length === 0 : String(v).trim() === '';
 
       if (q.required && empty) {
-        showError(q.fid, q.type === 'file' ? 'Please attach a file.'
-                       : q.fileAsLink ? 'Please paste a link to your file.'
+        showError(q.fid, q.type === 'file' ? 'Please attach a file (or open "Have a link instead?").'
                        : (q.type === 'choice' || q.type === 'multi') ? 'Please choose an answer.'
                        : 'This one is required.');
         return false;
@@ -640,7 +655,7 @@
         showError(q.fid, 'Please include the full number with country code.');
         return false;
       }
-      if (q.fileAsLink && !/^https?:\/\/[^\s.]+\.\S+$/i.test(v)) {
+      if (q.type === 'file' && !uploaded[q.fid] && !/^https?:\/\/[^\s.]+\.\S+$/i.test(v)) {
         showError(q.fid, 'Please paste the full link, starting with https://');
         return false;
       }
@@ -806,7 +821,7 @@
       // Any file still being read must finish first, or it is dropped silently.
       var pending = Object.keys(reading).map(function (k) { return reading[k]; });
       if (pending.length) {
-        busy('Attaching files');
+        busy('Finishing your uploads');
         Promise.all(pending).then(send);
       } else {
         send();
@@ -824,7 +839,7 @@
     function send() {
       var answers = {};
       questions.forEach(function (q) {
-        if (q.type === 'file') return;
+        // A file question's answer is the Drive link of its upload, or a pasted link.
         var v = valueOf(q);
         if (Array.isArray(v) ? v.length : String(v).length) answers[q.fid] = v;
       });
@@ -839,20 +854,10 @@
       busy('Sending');
       banner.removeAttribute('data-show');
 
-      // The intake still insists a required file question arrives as a file. An
-      // empty one is skipped before any Drive call, so it only satisfies that check;
-      // the link itself travels in answers.
-      var sentFiles = Object.keys(files).map(function (k) { return files[k]; });
-      questions.forEach(function (q) {
-        if (q.fileAsLink && q.intakeRequires && answers[q.fid]) {
-          sentFiles.push({ fid: q.fid, name: 'link', mimeType: 'text/uri-list', data: '' });
-        }
-      });
-
       post({
         role: form.key,
         answers: answers,
-        files: sentFiles,
+        files: [],                    // uploads travel as links in `answers`
         honeypot: (document.getElementById('hp') || {}).value || '',
         context: context({
           time_to_complete_sec: Math.round((Date.now() - startedAt) / 1000)

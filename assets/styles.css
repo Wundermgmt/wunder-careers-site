@@ -480,3 +480,5 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] {
   .meta__k { flex: none; }
   .meta__v { margin-top: 0; text-align: right; }
 }
+
+.field__alt { margin-top: 10px; }

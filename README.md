@@ -47,7 +47,7 @@ This repo is connected through Render's GitHub App instead, so a push deploys. O
 | `assets/forms.js` | **Generated.** The 9 roles, their ad copy and their questions |
 | `assets/angle.js` | Collapses Meta's three spellings of one ad creative into one slug |
 | `assets/postings-live.js` | Merges live postings from the hiring admin app |
-| `assets/config.js` | The only file edited by hand |
+| `assets/config.js` | The only file edited by hand (intake and upload endpoints, 8 MB cap, company links) |
 | `assets/styles.css` | All styling |
 
 ## How postings work now
@@ -61,6 +61,20 @@ the admin app runs on Render's free tier, which sleeps after 15 minutes and take
 to wake. If the page waited on it, an asleep admin app would cost applications. So the baked
 roles render instantly and the fetch only ever improves on them. A dead host, a timeout, a
 non-2xx, malformed JSON or an empty list all leave the page exactly as it was.
+
+## File uploads (CV, typing-test screenshot)
+
+A picked file is uploaded at once to `UPLOAD_ENDPOINT` (the portal, `wunder-hr-suite`
+`wunder-hr-app/lib/hiring/careers-upload.js`). The portal saves it in the private
+**HIRING UPLOADS (private)** Shared Drive and answers with the Drive link; the site puts that
+link in the file question's answer, so `ENDPOINT` still gets a small JSON post. Under the
+picker, "Have a link instead?" takes a pasted link (Google Doc, Dropbox) as the same answer.
+
+History: from 16 Sep 2026 the old Apps Script intake could not save any upload (Workspace
+refuses "Anyone with the link" sharing, Drive error `publishOutNotPermitted`), and the
+workaround of pasted links cut phone conversion from 5.4% to 0.4%. Do not go back to
+link-only file questions. Never make an uploaded file link-shared; reviewers are Shared
+Drive members.
 
 ## Editing
 
