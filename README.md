@@ -1,3 +1,9 @@
+> **Retired 22 Oct 2026.** The live careers site is served by the portal from
+> `Wundermgmt/wunder-hr-suite` (`wunder-hr-app/public/careers`) at
+> <https://wunderportal.com/hr/hiring-admin/app/careers/>. Edit it there; changes here reach
+> nobody. This repo is kept only as history (and the ad images in `assets/ads/`).
+> Do not connect Render to it.
+
 # Wunder Management — careers site
 
 > **Company copy.** The live site deploys from
