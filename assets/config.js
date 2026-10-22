@@ -15,12 +15,16 @@ window.WUNDER_CONFIG = {
   // "Failed to fetch". Switch back only if it is deployed to "Anyone" again.
   ENDPOINT: "https://wunderportal.com/hr/hiring-admin/app/careers/apply",
 
+  // Where a picked CV or typing-test screenshot is uploaded first. The portal saves
+  // it privately in Drive and answers with the link that goes in the application.
+  UPLOAD_ENDPOINT: "https://wunderportal.com/hr/hiring-admin/app/careers/upload",
+
   // Logs one row per page open to the "Page Views" tab. Applications divided by
   // page views is the real completion rate, measured on our side rather than
   // inferred from Meta.
   TRACK_PAGE_VIEWS: true,
 
-  // Must match CONFIG.MAX_FILE_MB in Config.gs.
+  // Must match MAX_FILE_BYTES in wunder-hr-app/lib/hiring/careers-upload.js.
   MAX_FILE_MB: 8,
 
   // Live job postings, served by the hiring admin app. When this is unreachable
